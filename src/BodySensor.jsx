@@ -18,7 +18,7 @@ import { PinataGame }    from './games/Pinatagame.js';
 import { SableGame }     from './games/SableGame.js';
 import { SaltaCuerdaGame } from './games/SaltacuerdaGame.js';
 import { PortalGame }    from './games/PortalGame.js';
-import { MuroInfernal }  from './games/MuroInfernal.js';
+import { MuroInfernal }  from './games/Muroinfernal.js';
 import { SFX }           from './games/SoundEngine.js';
 import { PanelConfigJuego, defaultConfig, validateConfig } from './games/ConfiguracionJuegos';
 import { PinDocente, PreguntasDocente, ModoPreguntas, MATERIAS_LABEL } from './games/PreguntasDocente';

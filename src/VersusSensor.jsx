@@ -17,7 +17,7 @@ import { PortalGame }      from './games/PortalGame.js';
 import { SaltaCuerdaGame } from './games/SaltacuerdaGame.js';
 import { BoxeoGame }       from './games/Boxeogame.js';
 import { KienzanGame }     from './games/Kienzangame.js';
-import { MuroInfernal }  from './games/MuroInfernal.js';
+import { MuroInfernal }  from './games/Muroinfernal.js';
 import { SFX }           from './games/SoundEngine.js';
 import { PanelConfigJuego, defaultConfig, validateConfig, PRESETS } from './games/ConfiguracionJuegos';
 import { PinDocente, PreguntasDocente, ModoPreguntas, MATERIAS_LABEL } from './games/PreguntasDocente';
