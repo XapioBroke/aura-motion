@@ -35,19 +35,20 @@ async function init() {
   const customToken = params.get('token')
 
   if (customToken) {
-    // Limpiar token de la URL
     window.history.replaceState({}, document.title, window.location.pathname)
     try {
       await signInWithCustomToken(auth, customToken)
     } catch(e) {
       console.warn('Error con custom token:', e.message)
-      window.location.replace('https://iapprende.com')
-      return
+      // Si es sesión anónima, el token ya habrá sido procesado
+      // No redirigir aún, esperar onAuthStateChanged
     }
   }
 
   onAuthStateChanged(auth, (user) => {
     if (user) {
+      // Usuario autenticado (docente, alumno con código, o invitado)
+      // El rol viene en localStorage puesto por el landing
       root.render(
         <StrictMode>
           <App />
