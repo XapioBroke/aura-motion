@@ -7,6 +7,14 @@ import NexusDashboard from './NexusDashboard';
 import VersusSensor from './VersusSensor';
 import AlumnoSelector from './AlumnoSelector';
 import AvatarPage from './avatarpage';
+import ModoDemo from './ModoDemo';
+
+function getRol(user) {
+  if (!user) return null;
+  if (user.isAnonymous) return localStorage.getItem('iapprende_rol') || 'invitado';
+  if (user.email?.endsWith('@jaliscoedu.mx')) return 'docente';
+  return 'invitado';
+}
 
 // ── Detectar rol desde el token de Firebase ──────────────────
 // El rol se guarda en Firestore pero para Aura Motion
@@ -27,7 +35,21 @@ function getRolDesdeUser(user) {
 }
 
 function App() {
-  const [trimestreActivo, setTrimestreActivo]     = useState('tri1');
+  const [trimestreActivo, setTrimestreActivo] = useState('tri1');
+
+  // ── Auth + Rol ────────────────────────────────────────────
+  const [user, setUser]       = useState(null);
+  const [rol, setRol]         = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setRol(getRol(u));
+      setCargando(false);
+    });
+    return unsub;
+  }, []);
   const [pantallaActual, setPantallaActual]       = useState('lobby');
   const [materiaActiva, setMateriaActiva]         = useState(null);
   const [modoJuego, setModoJuego]                 = useState(null);
@@ -48,6 +70,23 @@ function App() {
   }, []);
 
   // ── Ruta /avatar — alumno personaliza desde su celular ──
+  // ── Ruta /avatar ──────────────────────────────────────────
+  if (window.location.pathname === '/avatar') return <AvatarPage />;
+
+  // ── Pantalla de carga mientras Firebase resuelve sesión ──
+  if (cargando) return (
+    <div style={{ background:'#000', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <p style={{ color:'#00FFFF', fontFamily:'Orbitron, sans-serif', fontSize:'1.2rem' }}>⚡ Inicializando NEXUS...</p>
+    </div>
+  );
+
+  // ── ALUMNO / INVITADO → ModoDemo (sin panel docente) ─────
+  if (rol === 'alumno' || rol === 'invitado') {
+    return <ModoDemo rol={rol} onSalir={() => window.location.replace('https://iapprende.com')} />;
+  }
+
+  // ── DOCENTE → flujo normal completo ──────────────────────
+  // (todo lo que sigue abajo queda exactamente igual)
   if (window.location.pathname === '/avatar') {
     return <AvatarPage />;
   }
