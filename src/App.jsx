@@ -9,55 +9,24 @@ import AlumnoSelector from './AlumnoSelector';
 import AvatarPage from './avatarpage';
 import ModoDemo from './ModoDemo';
 
-function getRol(user) {
-  if (!user) return null;
-  if (user.isAnonymous) return localStorage.getItem('iapprende_rol') || 'invitado';
-  if (user.email?.endsWith('@jaliscoedu.mx')) return 'docente';
-  return 'invitado';
-}
-
-// ── Detectar rol desde el token de Firebase ──────────────────
-// El rol se guarda en Firestore pero para Aura Motion
-// lo determinamos por el dominio del correo:
-// @jaliscoedu.mx → docente (acceso total)
-// sesión anónima con metadata → alumno (solo juego, sin panel)
-// sesión anónima sin metadata → invitado (solo lobby, sin panel)
-
+// ── Detectar rol desde el usuario de Firebase ────────────────
+// @jaliscoedu.mx           → docente (acceso total)
+// sesión anónima           → alumno / invitado (según localStorage)
 function getRolDesdeUser(user) {
   if (!user) return null;
   if (user.isAnonymous) {
-    // El rol específico (alumno/invitado) viene en localStorage
-    // puesto por el landing al redirigir
     return localStorage.getItem('iapprende_rol') || 'invitado';
   }
   if (user.email && user.email.endsWith('@jaliscoedu.mx')) return 'docente';
-  return 'invitado'; // correo que no es institucional
+  return 'invitado';
 }
 
 function App() {
   const [trimestreActivo, setTrimestreActivo] = useState('tri1');
 
   // ── Auth + Rol ────────────────────────────────────────────
-  const [user, setUser]       = useState(null);
-  const [rol, setRol]         = useState(null);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setRol(getRol(u));
-      setCargando(false);
-    });
-    return unsub;
-  }, []);
-  const [pantallaActual, setPantallaActual]       = useState('lobby');
-  const [materiaActiva, setMateriaActiva]         = useState(null);
-  const [modoJuego, setModoJuego]                 = useState(null);
-  const [alumnosSeleccionados, setAlumnosSeleccionados] = useState([]);
-
-  // ── Auth state ────────────────────────────────────────────
-  const [user, setUser]   = useState(null);
-  const [rol, setRol]     = useState(null);
+  const [user, setUser]         = useState(null);
+  const [rol, setRol]           = useState(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -69,29 +38,15 @@ function App() {
     return unsub;
   }, []);
 
-  // ── Ruta /avatar — alumno personaliza desde su celular ──
-  // ── Ruta /avatar ──────────────────────────────────────────
+  const [pantallaActual, setPantallaActual]             = useState('lobby');
+  const [materiaActiva, setMateriaActiva]                = useState(null);
+  const [modoJuego, setModoJuego]                        = useState(null);
+  const [alumnosSeleccionados, setAlumnosSeleccionados]  = useState([]);
+
+  // ── Ruta /avatar — alumno personaliza desde su celular ──────
   if (window.location.pathname === '/avatar') return <AvatarPage />;
 
-  // ── Pantalla de carga mientras Firebase resuelve sesión ──
-  if (cargando) return (
-    <div style={{ background:'#000', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <p style={{ color:'#00FFFF', fontFamily:'Orbitron, sans-serif', fontSize:'1.2rem' }}>⚡ Inicializando NEXUS...</p>
-    </div>
-  );
-
-  // ── ALUMNO / INVITADO → ModoDemo (sin panel docente) ─────
-  if (rol === 'alumno' || rol === 'invitado') {
-    return <ModoDemo rol={rol} onSalir={() => window.location.replace('https://iapprende.com')} />;
-  }
-
-  // ── DOCENTE → flujo normal completo ──────────────────────
-  // (todo lo que sigue abajo queda exactamente igual)
-  if (window.location.pathname === '/avatar') {
-    return <AvatarPage />;
-  }
-
-  // ── Pantalla de carga ─────────────────────────────────────
+  // ── Pantalla de carga mientras Firebase resuelve sesión ─────
   if (cargando) {
     return (
       <div style={{ background: '#000', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -101,6 +56,13 @@ function App() {
       </div>
     );
   }
+
+  // ── ALUMNO / INVITADO → ModoDemo (sin panel docente) ────────
+  if (rol === 'alumno' || rol === 'invitado') {
+    return <ModoDemo rol={rol} onSalir={() => window.location.replace('https://iapprende.com')} />;
+  }
+
+  // ── DOCENTE → flujo normal completo ──────────────────────────
 
   // ── Helpers de navegación ─────────────────────────────────
   const manejarSeleccion = (idMateria) => {
@@ -140,18 +102,18 @@ function App() {
 
   const getMateriaInfo = (materia) => {
     const info = {
-      force:      { color: '#00FF41', nombre: 'FORCE TRAINING',     icono: '⚡' },
-      chronos:    { color: '#FFD700', nombre: 'CRÓNICAS DEL TIEMPO', icono: '🏛️' },
-      quantum:    { color: '#00FFFF', nombre: 'QUANTUM LOGIC',       icono: '📐' },
-      bio_genesis:{ color: '#FF00FF', nombre: 'BIO GÉNESIS',         icono: '🧬' },
-      lingua:     { color: '#FF4500', nombre: 'NEXO LINGÜÍSTICO',    icono: '🗣️' }
+      force:       { color: '#00FF41', nombre: 'FORCE TRAINING',      icono: '⚡' },
+      chronos:     { color: '#FFD700', nombre: 'CRÓNICAS DEL TIEMPO', icono: '🏛️' },
+      quantum:     { color: '#00FFFF', nombre: 'QUANTUM LOGIC',       icono: '📐' },
+      bio_genesis: { color: '#FF00FF', nombre: 'BIO GÉNESIS',         icono: '🧬' },
+      lingua:      { color: '#FF4500', nombre: 'NEXO LINGÜÍSTICO',    icono: '🗣️' }
     };
     return info[materia] || info.quantum;
   };
 
   const materiaInfo = getMateriaInfo(materiaActiva);
 
-  // ── El botón de panel docente solo aparece si es docente ──
+  // ── El botón de panel docente solo aparece si es docente ────
   const puedeVerPanel = rol === 'docente';
 
   return (
@@ -171,7 +133,6 @@ function App() {
       {/* LOBBY */}
       {pantallaActual === 'lobby' && (
         <>
-          {/* Botón panel docente — solo si es docente */}
           {puedeVerPanel && (
             <div style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 100 }}>
               <button
@@ -184,7 +145,6 @@ function App() {
             </div>
           )}
 
-          {/* Badge de rol para alumno/invitado */}
           {!puedeVerPanel && (
             <div style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 100, display: 'flex', gap: '10px', alignItems: 'center' }}>
               <span style={{
