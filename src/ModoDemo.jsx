@@ -1,48 +1,75 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { PoseLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { ArponGame }  from './games/ArponGame.js';
 import { PinataGame } from './games/Pinatagame.js';
 import { LaserGame }  from './games/LaserGame.js';
 import { SFX }        from './games/SoundEngine.js';
 
-// ── Juegos disponibles en modo demo ──────────────────────────
 const JUEGOS_DEMO = [
-  { id: 'arpon',  nombre: 'Arpón',  icono: '🐋', desc: 'Lanza el arpón con precisión', motor: ArponGame,  materia: 'quantum',  color: '#00FFFF' },
-  { id: 'pinata', nombre: 'Piñata', icono: '🎉', desc: 'Rompe las piñatas correctas',  motor: PinataGame, materia: 'force',    color: '#00FF41' },
-  { id: 'laser',  nombre: 'Láser',  icono: '🔫', desc: 'Revienta globos con rayos',    motor: LaserGame,  materia: 'chronos',  color: '#FFD700' },
+  { id: 'arpon',  nombre: 'Arpón',  icono: '🐋', desc: 'Lanza el arpón con precisión', motor: ArponGame,  materia: 'quantum', color: '#00FFFF' },
+  { id: 'pinata', nombre: 'Piñata', icono: '🎉', desc: 'Rompe las piñatas correctas',  motor: PinataGame, materia: 'force',   color: '#00FF41' },
+  { id: 'laser',  nombre: 'Láser',  icono: '🔫', desc: 'Revienta globos con rayos',    motor: LaserGame,  materia: 'chronos', color: '#FFD700' },
 ];
 
 const ModoDemo = ({ rol, onSalir }) => {
-  const videoRef    = useRef(null);
-  const canvasRef   = useRef(null);
-  const iaIniciada  = useRef(false);
-  const requestRef  = useRef();
-  const motorRef    = useRef(null);
-  const historial   = useRef(null);
-  const faseRef     = useRef('selector'); // selector | jugando | fin
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const iaIniciada = useRef(false);
+  const requestRef = useRef();
+  const motorRef   = useRef(null);
+  const historial  = useRef(null);
+  const faseRef    = useRef('selector');
+  const puntosRef  = useRef(0);
 
-  const [fase, setFase]           = useState('selector');
-  const [juegoActual, setJuego]   = useState(null);
-  const [estado, setEstado]       = useState('calibrando');
-  const [puntos, setPuntos]       = useState(0);
-  const [flash, setFlash]         = useState(null);
-  const puntosRef = useRef(0);
+  const [fase, setFase]         = useState('selector'); // selector | jugando | metricas
+  const [juegoActual, setJuego] = useState(null);
+  const [estado, setEstado]     = useState('calibrando');
+  const [puntos, setPuntos]     = useState(0);
+  const [flash, setFlash]       = useState(null);
+
+  // ── Métricas ──────────────────────────────────────────────
+  const [alumnos, setAlumnos]         = useState([]);
+  const [cargandoMetricas, setCargando] = useState(false);
+  const [periodoVista, setPeriodo]    = useState('xp_total');
 
   const esAlumno   = rol === 'alumno';
-  const esInvitado = rol === 'invitado';
+  const grupo      = localStorage.getItem('iapprende_grupo')   || '';
+  const escuela    = localStorage.getItem('iapprende_escuela') || '';
 
-  // ── Info del alumno desde localStorage ───────────────────
-  const grupo   = localStorage.getItem('iapprende_grupo')   || '';
-  const escuela = localStorage.getItem('iapprende_escuela') || '';
+  // ── Cargar métricas del grupo desde Firestore ─────────────
+  const cargarMetricas = async () => {
+    if (!grupo || !escuela) return;
+    setCargando(true);
+    try {
+      const q = query(
+        collection(db, 'alumnos'),
+        where('escuelaNombre', '==', escuela),
+        where('grupo', '==', grupo)
+      );
+      const snap = await getDocs(q);
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAlumnos(data.sort((a, b) => (b[periodoVista] || 0) - (a[periodoVista] || 0)));
+    } catch(e) {
+      console.error('Error cargando métricas:', e);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const verMetricas = () => {
+    faseRef.current = 'metricas';
+    setFase('metricas');
+    cargarMetricas();
+  };
 
   const mostrarFlash = (texto, color = '#00FF41') => {
     setFlash({ texto, color });
     setTimeout(() => setFlash(null), 1500);
   };
 
-  // ── Seleccionar juego e iniciar ───────────────────────────
   const iniciarJuego = (juego) => {
     setJuego(juego);
     puntosRef.current = 0;
@@ -65,15 +92,12 @@ const ModoDemo = ({ rol, onSalir }) => {
 
   const cerrarSesion = async () => {
     await signOut(auth);
-    localStorage.removeItem('iapprende_rol');
-    localStorage.removeItem('iapprende_codigo');
-    localStorage.removeItem('iapprende_grupo');
-    localStorage.removeItem('iapprende_escuela');
-    localStorage.removeItem('iapprende_proyecto');
+    ['iapprende_rol','iapprende_codigo','iapprende_grupo','iapprende_escuela','iapprende_proyecto']
+      .forEach(k => localStorage.removeItem(k));
     window.location.replace('https://iapprende.com');
   };
 
-  // ── Motor de cámara + pose ────────────────────────────────
+  // ── Motor de cámara ───────────────────────────────────────
   useEffect(() => {
     if (iaIniciada.current) return;
     iaIniciada.current = true;
@@ -108,7 +132,6 @@ const ModoDemo = ({ rol, onSalir }) => {
         const renderLoop = (timestamp) => {
           const delta = (timestamp - lastTime) * 0.06;
           lastTime = timestamp;
-
           const W = canvasEl.width, H = canvasEl.height;
 
           if (videoEl.readyState >= 2) {
@@ -118,8 +141,6 @@ const ModoDemo = ({ rol, onSalir }) => {
 
               ctx.save();
               ctx.clearRect(0, 0, W, H);
-
-              // Fondo
               ctx.fillStyle = '#050510';
               ctx.fillRect(0, 0, W, H);
 
@@ -194,20 +215,15 @@ const ModoDemo = ({ rol, onSalir }) => {
                   );
                 }
                 motorRef.current.render(ctx, W, H);
-
-                // renderBrazos si el juego lo soporta
-                if (lm && motorRef.current.renderBrazos) {
+                if (lm && motorRef.current.renderBrazos)
                   motorRef.current.renderBrazos(ctx, lm, W, H);
-                }
               }
 
               ctx.restore();
             }
           }
-
           requestRef.current = requestAnimationFrame(renderLoop);
         };
-
         renderLoop(0);
       } catch(err) {
         console.error(err);
@@ -216,7 +232,6 @@ const ModoDemo = ({ rol, onSalir }) => {
     };
 
     arrancar();
-
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       if (videoRef.current?.srcObject)
@@ -225,85 +240,84 @@ const ModoDemo = ({ rol, onSalir }) => {
     };
   }, []);
 
+  // ── COLOR DE TEMA ACTUAL ──────────────────────────────────
+  const colorTema = juegoActual?.color || (esAlumno ? '#00FF41' : '#00FFFF');
+
   // ── RENDER ────────────────────────────────────────────────
   return (
     <div style={{ background:'#000', minHeight:'100vh', display:'flex', flexDirection:'column', position:'relative' }}>
 
-      {/* Header compacto */}
+      {/* Header */}
       <header style={{
         display:'flex', alignItems:'center', gap:'8px',
         padding:'6px 16px', background:'rgba(0,0,0,0.85)',
-        borderBottom:`1px solid ${juegoActual?.color || '#00FFFF'}44`,
-        zIndex:10, flexShrink:0,
+        borderBottom:`1px solid ${colorTema}44`, zIndex:10, flexShrink:0,
       }}>
-        <span style={{ fontFamily:'Orbitron, sans-serif', fontSize:'0.75rem', color: juegoActual?.color || '#00FFFF', fontWeight:'bold' }}>
+        <span style={{ fontFamily:'Orbitron, sans-serif', fontSize:'0.75rem', color:colorTema, fontWeight:'bold' }}>
           NEXUS {esAlumno ? '— ALUMNO' : '— INVITADO'}
         </span>
-
         {esAlumno && grupo && (
           <span style={{ fontSize:'0.7rem', color:'rgba(255,255,255,0.4)', fontFamily:'Rajdhani, sans-serif' }}>
             · {escuela} / Grupo {grupo}
           </span>
         )}
-
         <div style={{ flex:1 }}/>
-
         {fase === 'jugando' && (
           <span style={{ fontFamily:'Orbitron, sans-serif', fontSize:'0.85rem', color:'#FFD700', fontWeight:'bold' }}>
             ⭐ {puntos} XP
           </span>
         )}
-
         {fase === 'jugando' && (
-          <button onClick={volverAlSelector} style={{
-            background:'rgba(255,200,0,0.15)', border:'1px solid #FFC80055',
-            borderRadius:'6px', color:'#FFC800', fontSize:'0.7rem', padding:'3px 10px',
-            cursor:'pointer', fontFamily:'Orbitron, sans-serif'
-          }}>← Juegos</button>
+          <button onClick={volverAlSelector} style={{ background:'rgba(255,200,0,0.15)', border:'1px solid #FFC80055', borderRadius:'6px', color:'#FFC800', fontSize:'0.7rem', padding:'3px 10px', cursor:'pointer', fontFamily:'Orbitron, sans-serif' }}>
+            ← Juegos
+          </button>
         )}
-
-        <button onClick={cerrarSesion} style={{
-          background:'rgba(255,8,68,0.18)', border:'1px solid #FF084455',
-          borderRadius:'6px', color:'#FF0844', fontSize:'0.7rem', padding:'3px 10px',
-          cursor:'pointer', fontFamily:'Orbitron, sans-serif'
-        }}>Salir</button>
-
+        {fase === 'metricas' && (
+          <button onClick={volverAlSelector} style={{ background:'rgba(255,200,0,0.15)', border:'1px solid #FFC80055', borderRadius:'6px', color:'#FFC800', fontSize:'0.7rem', padding:'3px 10px', cursor:'pointer', fontFamily:'Orbitron, sans-serif' }}>
+            ← Volver
+          </button>
+        )}
+        <button onClick={cerrarSesion} style={{ background:'rgba(255,8,68,0.18)', border:'1px solid #FF084455', borderRadius:'6px', color:'#FF0844', fontSize:'0.7rem', padding:'3px 10px', cursor:'pointer', fontFamily:'Orbitron, sans-serif' }}>
+          Salir
+        </button>
         <span style={{ fontSize:'0.65rem', color: estado==='activo' ? '#00FF41' : '#888' }}>
           {estado==='activo' ? '⚡' : '⏳'}
         </span>
       </header>
 
-      {/* Canvas */}
+      {/* Canvas (siempre activo en background) */}
       <div style={{ position:'relative', flex:1, display:'flex', justifyContent:'center', alignItems:'center' }}>
         <video ref={videoRef} style={{ display:'none' }} playsInline />
         <canvas ref={canvasRef} width="1280" height="720"
           style={{ width:'100%', height:'auto', maxHeight:'calc(100vh - 52px)', objectFit:'cover' }} />
 
-        {/* Flash */}
         {flash && (
-          <div style={{
-            position:'absolute', top:'20%', left:'50%', transform:'translateX(-50%)',
-            fontFamily:'Orbitron, sans-serif', fontSize:'2rem', fontWeight:'bold',
-            color:flash.color, textShadow:`0 0 30px ${flash.color}`,
-            pointerEvents:'none',
-          }}>{flash.texto}</div>
+          <div style={{ position:'absolute', top:'20%', left:'50%', transform:'translateX(-50%)', fontFamily:'Orbitron, sans-serif', fontSize:'2rem', fontWeight:'bold', color:flash.color, textShadow:`0 0 30px ${flash.color}`, pointerEvents:'none' }}>
+            {flash.texto}
+          </div>
         )}
 
-        {/* ── SELECTOR DE JUEGO ── */}
+        {/* ══════════ PANTALLA DE CARGA ══════════ */}
+        {estado === 'calibrando' && (
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.9)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'16px' }}>
+            <div style={{ fontFamily:'Orbitron, sans-serif', color:'#00FFFF', fontSize:'1.2rem' }}>⚡ Iniciando cámara...</div>
+            <div style={{ color:'rgba(255,255,255,0.4)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.9rem' }}>Asegúrate de permitir acceso a la cámara</div>
+          </div>
+        )}
+
+        {estado === 'error' && (
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.9)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'16px' }}>
+            <div style={{ fontFamily:'Orbitron, sans-serif', color:'#FF4444', fontSize:'1.2rem' }}>❌ Error de cámara</div>
+            <button onClick={() => window.location.reload()} style={{ background:'rgba(0,255,65,0.15)', border:'1px solid #00FF41', borderRadius:'8px', color:'#00FF41', padding:'10px 24px', cursor:'pointer', fontFamily:'Orbitron, sans-serif', fontSize:'0.85rem' }}>🔄 Reintentar</button>
+          </div>
+        )}
+
+        {/* ══════════ SELECTOR DE JUEGOS ══════════ */}
         {fase === 'selector' && estado === 'activo' && (
-          <div style={{
-            position:'absolute', inset:0,
-            background:'rgba(0,0,0,0.88)', backdropFilter:'blur(12px)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            gap:'24px', padding:'24px',
-          }}>
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.88)', backdropFilter:'blur(12px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'24px', padding:'24px' }}>
+
             {/* Badge de rol */}
-            <div style={{
-              display:'flex', alignItems:'center', gap:'8px',
-              background: esAlumno ? 'rgba(0,255,65,0.1)' : 'rgba(0,255,255,0.1)',
-              border:`1px solid ${esAlumno ? '#00FF41' : '#00FFFF'}44`,
-              borderRadius:'100px', padding:'6px 18px',
-            }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', background: esAlumno ? 'rgba(0,255,65,0.1)' : 'rgba(0,255,255,0.1)', border:`1px solid ${esAlumno ? '#00FF41' : '#00FFFF'}44`, borderRadius:'100px', padding:'6px 18px' }}>
               <span style={{ fontSize:'20px' }}>{esAlumno ? '🎒' : '🌐'}</span>
               <span style={{ fontFamily:'Orbitron, sans-serif', fontSize:'0.75rem', color: esAlumno ? '#00FF41' : '#00FFFF', fontWeight:'600' }}>
                 {esAlumno ? `ALUMNO — Grupo ${grupo || '?'}` : 'MODO INVITADO'}
@@ -311,13 +325,9 @@ const ModoDemo = ({ rol, onSalir }) => {
             </div>
 
             <div style={{ textAlign:'center' }}>
-              <h2 style={{ fontFamily:'Orbitron, sans-serif', color:'#FFF', fontSize:'clamp(1.2rem,3vw,2rem)', margin:'0 0 8px' }}>
-                ⚡ ELIGE TU JUEGO
-              </h2>
+              <h2 style={{ fontFamily:'Orbitron, sans-serif', color:'#FFF', fontSize:'clamp(1.2rem,3vw,2rem)', margin:'0 0 8px' }}>⚡ ELIGE TU JUEGO</h2>
               <p style={{ color:'rgba(255,255,255,0.45)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.95rem', margin:0 }}>
-                {esAlumno
-                  ? 'Practica con estos mini juegos. Tus docentes pueden ver tu progreso.'
-                  : 'Explora la plataforma. Sin guardado de estadísticas.'}
+                {esAlumno ? 'Practica con estos mini juegos en modo demo.' : 'Explora la plataforma sin registro. Sin guardado de estadísticas.'}
               </p>
             </div>
 
@@ -325,78 +335,105 @@ const ModoDemo = ({ rol, onSalir }) => {
             <div style={{ display:'flex', gap:'16px', flexWrap:'wrap', justifyContent:'center', maxWidth:'800px' }}>
               {JUEGOS_DEMO.map(j => (
                 <button key={j.id} onClick={() => iniciarJuego(j)}
-                  style={{
-                    display:'flex', flexDirection:'column', alignItems:'center', gap:'12px',
-                    padding:'28px 24px', width:'220px',
-                    background:`rgba(${j.color === '#00FFFF' ? '0,255,255' : j.color === '#00FF41' ? '0,255,65' : '255,215,0'},0.08)`,
-                    border:`2px solid ${j.color}44`,
-                    borderRadius:'20px', cursor:'pointer', color:'#FFF',
-                    transition:'all .25s', fontFamily:'Orbitron, sans-serif',
-                  }}
-                  onMouseOver={e => { e.currentTarget.style.borderColor = j.color; e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = `0 12px 32px ${j.color}44`; }}
-                  onMouseOut={e  => { e.currentTarget.style.borderColor = j.color+'44'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'12px', padding:'28px 24px', width:'200px', background:`rgba(0,0,0,0.5)`, border:`2px solid ${j.color}44`, borderRadius:'20px', cursor:'pointer', color:'#FFF', transition:'all .25s', fontFamily:'Orbitron, sans-serif' }}
+                  onMouseOver={e => { e.currentTarget.style.borderColor=j.color; e.currentTarget.style.transform='translateY(-6px)'; e.currentTarget.style.boxShadow=`0 12px 32px ${j.color}44`; }}
+                  onMouseOut={e  => { e.currentTarget.style.borderColor=j.color+'44'; e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='none'; }}>
                   <span style={{ fontSize:'3rem' }}>{j.icono}</span>
                   <div>
                     <div style={{ fontWeight:'700', fontSize:'1rem', color:j.color, marginBottom:'4px' }}>{j.nombre}</div>
                     <div style={{ fontSize:'0.7rem', color:'rgba(255,255,255,0.5)', fontFamily:'Rajdhani, sans-serif', textAlign:'center' }}>{j.desc}</div>
                   </div>
-                  <div style={{
-                    background:j.color, color:'#000', fontSize:'0.65rem', fontWeight:'700',
-                    padding:'4px 12px', borderRadius:'100px',
-                  }}>JUGAR →</div>
+                  <div style={{ background:j.color, color:'#000', fontSize:'0.65rem', fontWeight:'700', padding:'4px 12px', borderRadius:'100px' }}>JUGAR →</div>
                 </button>
               ))}
             </div>
 
-            {/* Info adicional para alumno */}
-            {esAlumno && (
-              <div style={{
-                background:'rgba(0,255,65,0.06)', border:'1px solid rgba(0,255,65,0.2)',
-                borderRadius:'12px', padding:'14px 20px', maxWidth:'500px', textAlign:'center',
-              }}>
-                <p style={{ color:'rgba(255,255,255,0.55)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.85rem', margin:0 }}>
-                  💡 Tu docente puede ver tus métricas y estadísticas desde el panel del profesor.
-                  Las partidas en modo demo no guardan XP en el sistema.
+            {/* Botón métricas — SOLO ALUMNO */}
+            {esAlumno && grupo && (
+              <button onClick={verMetricas}
+                style={{ display:'flex', alignItems:'center', gap:'10px', background:'rgba(0,255,65,0.08)', border:'2px solid #00FF4166', borderRadius:'14px', padding:'14px 28px', cursor:'pointer', color:'#00FF41', fontFamily:'Orbitron, sans-serif', fontSize:'0.85rem', fontWeight:'700', transition:'all .2s' }}
+                onMouseOver={e => { e.currentTarget.style.background='rgba(0,255,65,0.18)'; e.currentTarget.style.borderColor='#00FF41'; }}
+                onMouseOut={e  => { e.currentTarget.style.background='rgba(0,255,65,0.08)'; e.currentTarget.style.borderColor='#00FF4166'; }}>
+                <span style={{ fontSize:'1.4rem' }}>📊</span>
+                Ver métricas de mi grupo
+              </button>
+            )}
+
+            {/* Info invitado */}
+            {!esAlumno && (
+              <div style={{ background:'rgba(0,255,255,0.05)', border:'1px solid rgba(0,255,255,0.2)', borderRadius:'12px', padding:'14px 20px', maxWidth:'480px', textAlign:'center' }}>
+                <p style={{ color:'rgba(255,255,255,0.5)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.85rem', margin:0 }}>
+                  💡 Para acceder a métricas y seguimiento de progreso, solicita un código de acceso a tu docente.
                 </p>
               </div>
             )}
 
-            <button onClick={cerrarSesion} style={{
-              background:'transparent', border:'1px solid rgba(255,255,255,0.15)',
-              borderRadius:'8px', color:'rgba(255,255,255,0.4)', fontSize:'0.75rem',
-              padding:'8px 20px', cursor:'pointer', fontFamily:'Rajdhani, sans-serif',
-            }}>← Volver al inicio</button>
+            <button onClick={cerrarSesion} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:'8px', color:'rgba(255,255,255,0.4)', fontSize:'0.75rem', padding:'8px 20px', cursor:'pointer', fontFamily:'Rajdhani, sans-serif' }}>
+              ← Volver al inicio
+            </button>
           </div>
         )}
 
-        {/* Pantalla de carga */}
-        {estado === 'calibrando' && (
-          <div style={{
-            position:'absolute', inset:0, background:'rgba(0,0,0,0.9)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'16px',
-          }}>
-            <div style={{ fontFamily:'Orbitron, sans-serif', color:'#00FFFF', fontSize:'1.2rem' }}>
-              ⚡ Iniciando cámara...
-            </div>
-            <div style={{ color:'rgba(255,255,255,0.4)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.9rem' }}>
-              Asegúrate de permitir acceso a la cámara
-            </div>
-          </div>
-        )}
+        {/* ══════════ MÉTRICAS DEL GRUPO (solo alumno) ══════════ */}
+        {fase === 'metricas' && esAlumno && (
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.92)', backdropFilter:'blur(12px)', display:'flex', flexDirection:'column', alignItems:'center', padding:'32px 24px', overflowY:'auto', gap:'20px' }}>
 
-        {estado === 'error' && (
-          <div style={{
-            position:'absolute', inset:0, background:'rgba(0,0,0,0.9)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'16px',
-          }}>
-            <div style={{ fontFamily:'Orbitron, sans-serif', color:'#FF4444', fontSize:'1.2rem' }}>
-              ❌ Error de cámara
+            <div style={{ textAlign:'center' }}>
+              <h2 style={{ fontFamily:'Orbitron, sans-serif', color:'#00FF41', fontSize:'clamp(1.2rem,3vw,1.8rem)', margin:'0 0 6px' }}>
+                📊 MÉTRICAS DEL GRUPO
+              </h2>
+              <p style={{ color:'rgba(255,255,255,0.4)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.9rem', margin:0 }}>
+                {escuela} · Grupo {grupo} · Solo lectura
+              </p>
             </div>
-            <button onClick={() => window.location.reload()} style={{
-              background:'rgba(0,255,65,0.15)', border:'1px solid #00FF41',
-              borderRadius:'8px', color:'#00FF41', padding:'10px 24px',
-              cursor:'pointer', fontFamily:'Orbitron, sans-serif', fontSize:'0.85rem',
-            }}>🔄 Reintentar</button>
+
+            {/* Selector de periodo */}
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', justifyContent:'center' }}>
+              {[
+                { id:'tri1',     label:'📅 Trimestre 1' },
+                { id:'tri2',     label:'📅 Trimestre 2' },
+                { id:'tri3',     label:'📅 Trimestre 3' },
+                { id:'xp_total', label:'🌟 Acumulado' },
+              ].map(p => (
+                <button key={p.id} onClick={() => { setPeriodo(p.id); setAlumnos(prev => [...prev].sort((a,b) => (b[p.id]||0)-(a[p.id]||0))); }}
+                  style={{ padding:'6px 16px', borderRadius:'100px', border:`1px solid ${periodoVista===p.id ? '#00FF41' : 'rgba(255,255,255,0.2)'}`, background: periodoVista===p.id ? 'rgba(0,255,65,0.2)' : 'transparent', color: periodoVista===p.id ? '#00FF41' : 'rgba(255,255,255,0.5)', cursor:'pointer', fontFamily:'Orbitron, sans-serif', fontSize:'0.7rem', transition:'all .2s' }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tabla */}
+            {cargandoMetricas ? (
+              <div style={{ color:'rgba(255,255,255,0.4)', fontFamily:'Rajdhani, sans-serif', padding:'2rem' }}>Cargando...</div>
+            ) : alumnos.length === 0 ? (
+              <div style={{ color:'rgba(255,255,255,0.3)', fontFamily:'Rajdhani, sans-serif', padding:'2rem', textAlign:'center' }}>
+                No se encontraron alumnos para este grupo.<br/>Verifica con tu docente.
+              </div>
+            ) : (
+              <div style={{ width:'100%', maxWidth:'600px' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Rajdhani, sans-serif', fontSize:'1rem' }}>
+                  <thead>
+                    <tr style={{ background:'rgba(0,255,65,0.1)', color:'#00FF41', textAlign:'left' }}>
+                      <th style={{ padding:'10px 14px', borderBottom:'2px solid #00FF4144' }}>#</th>
+                      <th style={{ padding:'10px 14px', borderBottom:'2px solid #00FF4144' }}>Alumno</th>
+                      <th style={{ padding:'10px 14px', borderBottom:'2px solid #00FF4144', textAlign:'right' }}>XP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alumnos.map((a, i) => (
+                      <tr key={a.id} style={{ borderBottom:'1px solid rgba(255,255,255,0.05)', background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                        <td style={{ padding:'10px 14px', color: i===0?'#FFD700':i===1?'#C0C0C0':i===2?'#CD7F32':'#fff', fontWeight:'bold' }}>#{i+1}</td>
+                        <td style={{ padding:'10px 14px', color:'#fff' }}>{a.nombre}</td>
+                        <td style={{ padding:'10px 14px', color:'#00FF41', fontFamily:'Orbitron, sans-serif', textAlign:'right' }}>{a[periodoVista] || 0} XP</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ color:'rgba(255,255,255,0.25)', fontFamily:'Rajdhani, sans-serif', fontSize:'0.75rem', textAlign:'center', marginTop:'16px' }}>
+                  🔒 Modo solo lectura — no puedes editar estas métricas
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
