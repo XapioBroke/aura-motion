@@ -4,7 +4,7 @@ import './index.css'
 import App from './App.jsx'
 
 import { initializeApp } from 'firebase/app'
-import { getAuth, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth'
+import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCPn0kMMrx4tRW1XJfrTenqPB08XzAc1x0",
@@ -33,22 +33,42 @@ root.render(
 async function init() {
   const params = new URLSearchParams(window.location.search)
   const customToken = params.get('token')
+  const rol         = params.get('rol')
+  const grupo       = params.get('grupo')
+  const escuela     = params.get('escuela')
+
+  // Guardar metadata en localStorage del subdominio
+  if (rol)     localStorage.setItem('iapprende_rol', rol)
+  if (grupo)   localStorage.setItem('iapprende_grupo', grupo)
+  if (escuela) localStorage.setItem('iapprende_escuela', escuela)
+
+  // Limpiar params sensibles de la URL
+  if (params.toString()) {
+    window.history.replaceState({}, document.title, window.location.pathname)
+  }
 
   if (customToken) {
-    window.history.replaceState({}, document.title, window.location.pathname)
+    // Docente: autenticar con custom token
     try {
       await signInWithCustomToken(auth, customToken)
     } catch(e) {
       console.warn('Error con custom token:', e.message)
-      // Si es sesión anónima, el token ya habrá sido procesado
-      // No redirigir aún, esperar onAuthStateChanged
+      window.location.replace('https://iapprende.com')
+      return
+    }
+  } else if (rol === 'alumno' || rol === 'invitado') {
+    // Alumno/invitado: crear sesión anónima en este subdominio
+    try {
+      await signInAnonymously(auth)
+    } catch(e) {
+      console.warn('Error sesión anónima:', e.message)
+      window.location.replace('https://iapprende.com')
+      return
     }
   }
 
   onAuthStateChanged(auth, (user) => {
     if (user) {
-      // Usuario autenticado (docente, alumno con código, o invitado)
-      // El rol viene en localStorage puesto por el landing
       root.render(
         <StrictMode>
           <App />
