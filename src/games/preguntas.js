@@ -1,86 +1,4 @@
-// preguntas.js — parcheado para soportar banco demo
-// Si window._demoGenerarReto está definido, usa ese generador
-// Si no, usa el banco original del proyecto
-
-let bancoDocente = [];
-let modoActual = 'banco';
-
-export function setBancoDocente(preguntas, modo) {
-  bancoDocente = preguntas || [];
-  modoActual   = modo || 'banco';
-}
-
-// Banco original del proyecto (materias del juego)
-const BANCO_ORIGINAL = {
-  force: [
-    { pregunta: '¿Cuántos huesos tiene el cuerpo humano adulto?', opciones: [{ texto:'206', esCorrecto:true },{ texto:'180', esCorrecto:false },{ texto:'250', esCorrecto:false }] },
-    { pregunta: '¿Cuál músculo es el más grande del cuerpo?', opciones: [{ texto:'Glúteo mayor', esCorrecto:true },{ texto:'Bíceps', esCorrecto:false },{ texto:'Cuádriceps', esCorrecto:false }] },
-    { pregunta: '¿Qué sistema regula el movimiento corporal?', opciones: [{ texto:'Sistema nervioso', esCorrecto:true },{ texto:'Sistema digestivo', esCorrecto:false },{ texto:'Sistema inmune', esCorrecto:false }] },
-    { pregunta: '¿Cuántos litros de sangre bombea el corazón por día?', opciones: [{ texto:'7,000 litros', esCorrecto:true },{ texto:'500 litros', esCorrecto:false },{ texto:'2,000 litros', esCorrecto:false }] },
-    { pregunta: '¿Qué vitamina se produce al hacer ejercicio al sol?', opciones: [{ texto:'Vitamina D', esCorrecto:true },{ texto:'Vitamina C', esCorrecto:false },{ texto:'Vitamina B12', esCorrecto:false }] },
-  ],
-  chronos: [
-    { pregunta: '¿En qué año comenzó la Revolución Mexicana?', opciones: [{ texto:'1910', esCorrecto:true },{ texto:'1821', esCorrecto:false },{ texto:'1917', esCorrecto:false }] },
-    { pregunta: '¿Quién fue el primer presidente de México?', opciones: [{ texto:'Guadalupe Victoria', esCorrecto:true },{ texto:'Benito Juárez', esCorrecto:false },{ texto:'Porfirio Díaz', esCorrecto:false }] },
-    { pregunta: '¿En qué año se firmó la Independencia de México?', opciones: [{ texto:'1821', esCorrecto:true },{ texto:'1810', esCorrecto:false },{ texto:'1910', esCorrecto:false }] },
-    { pregunta: '¿Qué civilización construyó Teotihuacán?', opciones: [{ texto:'Teotihuacana', esCorrecto:true },{ texto:'Azteca', esCorrecto:false },{ texto:'Maya', esCorrecto:false }] },
-    { pregunta: '¿En qué año llegó Hernán Cortés a México?', opciones: [{ texto:'1519', esCorrecto:true },{ texto:'1492', esCorrecto:false },{ texto:'1521', esCorrecto:false }] },
-  ],
-  quantum: [
-    { pregunta: '¿Cuántos lados tiene un hexágono?', opciones: [{ texto:'6', esCorrecto:true },{ texto:'5', esCorrecto:false },{ texto:'7', esCorrecto:false }] },
-    { pregunta: '¿Cuál es la raíz cuadrada de 144?', opciones: [{ texto:'12', esCorrecto:true },{ texto:'14', esCorrecto:false },{ texto:'11', esCorrecto:false }] },
-    { pregunta: '¿Cuánto es 7 × 8?', opciones: [{ texto:'56', esCorrecto:true },{ texto:'54', esCorrecto:false },{ texto:'48', esCorrecto:false }] },
-    { pregunta: '¿Qué es el número π?', opciones: [{ texto:'3.14159...', esCorrecto:true },{ texto:'2.71828...', esCorrecto:false },{ texto:'1.61803...', esCorrecto:false }] },
-    { pregunta: '¿Cuántos ángulos tiene un triángulo?', opciones: [{ texto:'3', esCorrecto:true },{ texto:'4', esCorrecto:false },{ texto:'2', esCorrecto:false }] },
-  ],
-  bio_genesis: [
-    { pregunta: '¿Qué orgánulo produce energía en la célula?', opciones: [{ texto:'Mitocondria', esCorrecto:true },{ texto:'Núcleo', esCorrecto:false },{ texto:'Ribosoma', esCorrecto:false }] },
-    { pregunta: '¿Cuál es la molécula de la herencia?', opciones: [{ texto:'ADN', esCorrecto:true },{ texto:'ARN', esCorrecto:false },{ texto:'ATP', esCorrecto:false }] },
-    { pregunta: '¿Qué proceso produce oxígeno en las plantas?', opciones: [{ texto:'Fotosíntesis', esCorrecto:true },{ texto:'Respiración', esCorrecto:false },{ texto:'Fermentación', esCorrecto:false }] },
-    { pregunta: '¿Cuántos cromosomas tiene una célula humana?', opciones: [{ texto:'46', esCorrecto:true },{ texto:'23', esCorrecto:false },{ texto:'48', esCorrecto:false }] },
-    { pregunta: '¿Qué descubrió Watson y Crick?', opciones: [{ texto:'Estructura del ADN', esCorrecto:true },{ texto:'La célula', esCorrecto:false },{ texto:'La fotosíntesis', esCorrecto:false }] },
-  ],
-  lingua: [
-    { pregunta: '¿Cuántas letras tiene el abecedario español?', opciones: [{ texto:'27', esCorrecto:true },{ texto:'26', esCorrecto:false },{ texto:'28', esCorrecto:false }] },
-    { pregunta: '¿Qué es un sustantivo?', opciones: [{ texto:'Nombre de persona, lugar o cosa', esCorrecto:true },{ texto:'Acción o estado', esCorrecto:false },{ texto:'Describe al sustantivo', esCorrecto:false }] },
-    { pregunta: '¿Cuál es el idioma más hablado del mundo?', opciones: [{ texto:'Mandarín', esCorrecto:true },{ texto:'Inglés', esCorrecto:false },{ texto:'Español', esCorrecto:false }] },
-    { pregunta: '¿Qué es una onomatopeya?', opciones: [{ texto:'Palabra que imita un sonido', esCorrecto:true },{ texto:'Sinónimo de verbo', esCorrecto:false },{ texto:'Tipo de puntuación', esCorrecto:false }] },
-    { pregunta: '¿Cuántos fonemas tiene la palabra "casa"?', opciones: [{ texto:'4', esCorrecto:true },{ texto:'3', esCorrecto:false },{ texto:'5', esCorrecto:false }] },
-  ],
-};
-
-export function generarRetoActivo(materia) {
-  // Si hay un generador demo activo (modo invitado/alumno), usarlo
-  if (typeof window !== "undefined" && window._demoGenerarReto) {
-    return window._demoGenerarReto();
-  }
-
-  // Modo docente con banco personalizado
-  if (modoActual === "solo_docente" && bancoDocente.length > 0) {
-    const filtradas = bancoDocente.filter(p => p.activa !== false && (!p.materia || p.materia.includes(materia)));
-    if (filtradas.length > 0) {
-      const p = filtradas[Math.floor(Math.random() * filtradas.length)];
-      const falsas = (p.falsas || []).slice(0,2).map(t => ({ texto:t, esCorrecto:false }));
-      return { pregunta: p.pregunta, opciones: [...falsas, { texto:p.correcta, esCorrecto:true }].sort(()=>Math.random()-0.5) };
-    }
-  }
-
-  if (modoActual === "mezcla" && bancoDocente.length > 0) {
-    const usarDocente = Math.random() < 0.5;
-    if (usarDocente) {
-      const filtradas = bancoDocente.filter(p => p.activa !== false && (!p.materia || p.materia.includes(materia)));
-      if (filtradas.length > 0) {
-        const p = filtradas[Math.floor(Math.random() * filtradas.length)];
-        const falsas = (p.falsas || []).slice(0,2).map(t => ({ texto:t, esCorrecto:false }));
-        return { pregunta: p.pregunta, opciones: [...falsas, { texto:p.correcta, esCorrecto:true }].sort(()=>Math.random()-0.5) };
-      }
-    }
-  }
-
-  // Banco original por materia
-  const banco = BANCO_ORIGINAL[materia] || BANCO_ORIGINAL.quantum;
-  return banco[Math.floor(Math.random() * banco.length)];
-}// ============================================================
+// ============================================================
 //  BANCO DE PREGUNTAS POR MATERIA — sin cambios
 // ============================================================
 
@@ -183,24 +101,24 @@ export const generarReto = (materia) => {
 };
 
 // ============================================================
-//  EXTENSIÓN — Banco dinámico del docente
-//  Los motores siguen llamando generarReto() síncronamente.
-//  BodySensor carga las preguntas del docente y las inyecta
-//  aquí antes de iniciar el juego via setBancoDocente().
+//  EXTENSIÓN — Banco dinámico del docente + soporte demo
 // ============================================================
 
 let _preguntasDocente = [];
-let _modoActivo = 'banco'; // 'banco' | 'mezcla' | 'solo_docente'
+let _modoActivo = 'banco';
 
-// Llamado desde BodySensor/VersusSensor antes de init()
 export const setBancoDocente = (preguntas, modo) => {
   _preguntasDocente = preguntas || [];
   _modoActivo = modo || 'banco';
 };
 
 export const generarRetoActivo = (materia) => {
-  const banco = PREGUNTAS[materia] || PREGUNTAS.quantum;
+  // ── MODO DEMO: usar banco de preguntas por tema ──────────
+  if (typeof window !== 'undefined' && window._demoGenerarReto) {
+    return window._demoGenerarReto();
+  }
 
+  const banco = PREGUNTAS[materia] || PREGUNTAS.quantum;
   const activas = _preguntasDocente.filter(p =>
     p.activa && Array.isArray(p.materia) && p.materia.includes(materia)
   );
