@@ -102,7 +102,7 @@ function App() {
 
   const getMateriaInfo = (materia) => {
     const info = {
-      force:       { color: '#00FF41', nombre: 'FORCE TRAINING',      icono: '⚡' },
+      force:       { color: '#00FF41', nombre: 'FORTALEZA Y SALUD',      icono: '⚡' },
       chronos:     { color: '#FFD700', nombre: 'CRÓNICAS DEL TIEMPO', icono: '🏛️' },
       quantum:     { color: '#00FFFF', nombre: 'LOGICA CUANTICA',       icono: '📐' },
       bio_genesis: { color: '#FF00FF', nombre: 'BIO GÉNESIS',         icono: '🧬' },
