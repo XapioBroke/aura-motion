@@ -104,7 +104,7 @@ function App() {
     const info = {
       force:       { color: '#00FF41', nombre: 'FORCE TRAINING',      icono: '⚡' },
       chronos:     { color: '#FFD700', nombre: 'CRÓNICAS DEL TIEMPO', icono: '🏛️' },
-      quantum:     { color: '#00FFFF', nombre: 'QUANTUM LOGIC',       icono: '📐' },
+      quantum:     { color: '#00FFFF', nombre: 'LOGICA CUANTICA',       icono: '📐' },
       bio_genesis: { color: '#FF00FF', nombre: 'BIO GÉNESIS',         icono: '🧬' },
       lingua:      { color: '#FF4500', nombre: 'NEXO LINGÜÍSTICO',    icono: '🗣️' }
     };
