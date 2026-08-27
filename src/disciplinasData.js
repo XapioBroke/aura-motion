@@ -2,7 +2,7 @@
 export const disciplinas = [
     {
       id: 'force',
-      titulo: 'FORCE TRAINING',
+      titulo: 'FUERZA Y SALUD',
       subtitulo: 'De lo Humano y lo Comunitario',
       icono: '⚡',
       descripcion: 'Educación Física de alto rendimiento. Domina tu cuerpo mediante retos de resistencia, equilibrio y fuerza trackeados por IA.',
@@ -14,13 +14,13 @@ export const disciplinas = [
       titulo: 'CRÓNICAS DEL TIEMPO',
       subtitulo: 'Ética, Naturaleza y Sociedades',
       icono: '🏛️',
-      descripcion: 'Historia y Geografía inmersiva. Salta físicamente entre épocas y toma decisiones que definieron civilizaciones.',
+      descripcion: 'Historia, Force y Geografía inmersiva. Salta físicamente entre épocas y toma decisiones que definieron civilizaciones.',
       colorTema: '#FFD700', // Dorado
       avataresDisponibles: 2
     },
     {
       id: 'quantum',
-      titulo: 'QUANTUM LOGIC',
+      titulo: 'Logica Cuantica',
       subtitulo: 'Saberes y Pensamiento Científico',
       icono: '📐',
       descripcion: 'Matemáticas y Física kinestésica. Resuelve ecuaciones y manipula variables geométricas con tus manos en el aire.',
