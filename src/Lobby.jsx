@@ -7,7 +7,7 @@ const Lobby = ({ onSeleccionar }) => {
   return (
     <div className="lobby-container">
       <header className="lobby-header">
-        <h1 className="lobby-title">NEXUS ACADEMY</h1>
+        <h1 className="lobby-title">AURA MOTION</h1>
         <p className="lobby-subtitle">Selecciona tu disciplina y sincroniza tu avatar</p>
       </header>
 
