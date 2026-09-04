@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, increment, query, orderBy, writeBatch, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, increment, query, where, orderBy, writeBatch, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import './App.css';
 
@@ -40,9 +40,17 @@ const NexusDashboard = ({ onVolver, trimestreActivo, setTrimestreActivo, docente
   const [generandoCodigo, setGenerandoCodigo]   = useState(false);
   const [codigoRecienGenerado, setCodigoRecienGenerado] = useState(null);
 
+  // ── Cargar SOLO alumnos del docente conectado ─────────────
+  // FIX: antes cargaba TODA la colección 'alumnos' sin filtro — cualquier
+  // docente veía y editaba los alumnos de todos los demás. Ahora se filtra
+  // por docenteId, igual que en Lectura y Gamificación.
   const cargarDatos = async () => {
     try {
-      const alumnosQuery = query(collection(db, "alumnos"), orderBy("nombre", "asc"));
+      const alumnosQuery = query(
+        collection(db, "alumnos"),
+        where("docenteId", "==", docenteUid),
+        orderBy("nombre", "asc"),
+      );
       const alumnosSnapshot = await getDocs(alumnosQuery);
       const alumnosData = alumnosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAlumnos(alumnosData);
@@ -57,6 +65,32 @@ const NexusDashboard = ({ onVolver, trimestreActivo, setTrimestreActivo, docente
       setRankings(rankingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error("Error al cargar datos:", error);
+    }
+  };
+
+  // ── Reclamar alumnos sin dueño (migración inicial) ────────
+  // Igual que en Lectura/Gamificación: cubre alumnos creados ANTES de este
+  // cambio, que no tienen docenteId. Solo funciona mientras la colección no
+  // tenga ya alumnos de OTROS docentes reclamados — una vez que haya varios
+  // docentes reales con datos propios, esta lectura sin filtrar empezará a
+  // fallar por las reglas de seguridad (que es lo correcto: significa que ya
+  // no hay nada huérfano visible para ti). Si eso pasa y de verdad quedan
+  // huérfanos, hay que reclamarlos vía Firebase Console o una Cloud Function.
+  const reclamarAlumnosSinDueno = async () => {
+    if (!docenteUid) { alert('No hay sesión activa.'); return; }
+    if (!window.confirm('Esto asignará a tu cuenta cualquier alumno de Motion que no tenga dueño todavía. ¿Continuar?')) return;
+    try {
+      const snap = await getDocs(collection(db, 'alumnos'));
+      const huerfanos = snap.docs.filter(d => !d.data().docenteId);
+      if (!huerfanos.length) { alert('No hay alumnos sin dueño para reclamar.'); return; }
+      const batch = writeBatch(db);
+      huerfanos.forEach(d => batch.update(doc(db, 'alumnos', d.id), { docenteId: docenteUid }));
+      await batch.commit();
+      await cargarDatos();
+      alert(`✅ ${huerfanos.length} alumno(s) asignados a tu cuenta.`);
+    } catch (e) {
+      console.error('Error reclamando alumnos:', e);
+      alert('Error al reclamar alumnos. Si ves un error de permisos, probablemente ya no queden huérfanos visibles para ti (correcto) o hay datos de otro docente mezclados — en ese caso avísame.');
     }
   };
 
@@ -147,6 +181,7 @@ const NexusDashboard = ({ onVolver, trimestreActivo, setTrimestreActivo, docente
         escuelaNombre: nuevaEscuela.toUpperCase(),
         grupo: nuevoGrupo.toUpperCase(),
         avatarId: 1,
+        docenteId: docenteUid, // dueño directo — usado por las reglas de seguridad
         tri1: 0, tri2: 0, tri3: 0, xp_total: 0
       });
       setNuevoNombre('');
@@ -216,6 +251,10 @@ const NexusDashboard = ({ onVolver, trimestreActivo, setTrimestreActivo, docente
               <option value="tri3">TRIMESTRE 3</option>
             </select>
           </div>
+          <button className="btn-cyber" style={{ '--tema-color': '#FFD54F', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+            onClick={reclamarAlumnosSinDueno} title="Migración inicial: asigna a tu cuenta alumnos de Motion sin dueño">
+            🔓 RECLAMAR HUÉRFANOS
+          </button>
           <button className="btn-cyber" style={{ '--tema-color': '#00FF41', padding: '0.5rem 1rem', fontSize: '0.9rem' }}
             onClick={() => { setMostrarGenerador(true); }}>
             🔑 CÓDIGOS ALUMNOS
